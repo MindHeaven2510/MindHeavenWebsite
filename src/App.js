@@ -1,4 +1,15 @@
 import "./output.css";
+import { db } from "./firebase-config";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  deleteDoc,
+  doc,
+  orderBy,
+  query,
+  serverTimestamp,
+} from "firebase/firestore";
 
 import React, { useState, useEffect } from "react";
 import {
@@ -24,6 +35,10 @@ import {
   Menu,
   X,
   CheckCircle,
+  Trash,
+  PlusCircle,
+  AlertCircle,
+  Send,
   Calendar,
   Droplets,
   Moon,
@@ -176,10 +191,13 @@ const HomePage = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-            <button className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-4 rounded-full font-semibold text-lg hover:shadow-lg transform hover:scale-105 transition-all duration-300 flex items-center justify-center space-x-2">
+            <Link
+              to="/how-it-works"
+              className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-4 rounded-full font-semibold text-lg hover:shadow-lg transform hover:scale-105 transition-all duration-300 flex items-center justify-center space-x-2"
+            >
               <Play className="w-6 h-6" />
               <span>Watch How It Works</span>
-            </button>
+            </Link>
             <Link
               to="/download"
               className="bg-white text-emerald-600 px-8 py-4 rounded-full font-semibold text-lg border-2 border-emerald-200 hover:bg-emerald-50 transform hover:scale-105 transition-all duration-300 flex items-center justify-center space-x-2"
@@ -397,19 +415,29 @@ const HowItWorksPage = () => {
         </div>
 
         {/* Video Section */}
-        <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-8 mb-16 border border-white/50">
-          <div className="aspect-video bg-gradient-to-br from-emerald-100 to-teal-100 rounded-2xl flex items-center justify-center mb-6">
-            <div className="text-center">
-              <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 mx-auto shadow-lg">
-                <Play className="w-8 h-8 text-emerald-600 ml-1" />
+        <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-4 mb-16 border border-white/50 max-w-5xl mx-auto">
+          <div className="aspect-video max-w-4xl mx-auto bg-gradient-to-br from-emerald-100 to-teal-100 rounded-2xl overflow-hidden relative">
+            <video
+              className="w-full h-full object-cover rounded-2xl"
+              controls
+              poster="/thumbnail.png"
+            >
+              <source
+                src="/Your safe space for mental peace..mp4"
+                type="video/mp4"
+              />
+              {/* Fallback for browsers that don't support video */}
+              <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                <p className="text-gray-600">
+                  Your browser doesn't support video playback.
+                </p>
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                Watch MindHeaven in Action
-              </h3>
-              <p className="text-gray-600">
-                See how easy it is to start caring for your emotional well-being
-              </p>
-            </div>
+            </video>
+          </div>
+
+          {/* Optional: Video description */}
+          <div className="text-center mt-4">
+            <p className="text-gray-600"></p>
           </div>
         </div>
 
@@ -579,53 +607,124 @@ const DownloadPage = () => {
     </div>
   );
 };
-
-// Testimonials Page
+//testimonials page
 const TestimonialsPage = () => {
-  const testimonials = [
-    {
-      name: "Sarah M.",
-      role: "College Student",
-      content:
-        "MindHeaven has been my safe space during stressful exam periods. The mood tracker helps me understand my emotional patterns, and the AI chatbot always knows what to say when I'm feeling overwhelmed.",
-      rating: 5,
-      avatar: "S",
-    },
-    {
-      name: "Alex Chen",
-      role: "Graphic Designer",
-      content:
-        "As a creative person, I love how the journaling feature lets me express myself with stickers and photos. It's like having a digital diary that actually cares about my feelings.",
-      rating: 5,
-      avatar: "A",
-    },
-    {
-      name: "Maria L.",
-      role: "Working Professional",
-      content:
-        "The daily caring notifications are perfect. They remind me to take breaks, hydrate, and breathe. It's like having a gentle friend who always looks out for me.",
-      rating: 5,
-      avatar: "M",
-    },
-    {
-      name: "Jordan K.",
-      role: "Long-distance Relationship",
-      content:
-        "When I'm missing my partner, MindHeaven's emergency support mode has been a lifesaver. The breathing exercises and motivational messages help me through the tough moments.",
-      rating: 5,
-      avatar: "J",
-    },
-  ];
-
-  const stats = [
+  const [testimonials, setTestimonials] = useState([]);
+  const [stats, setStats] = useState([
     { label: "Moods Tracked", value: "25,000+", icon: Heart },
     { label: "Journal Entries", value: "12,500+", icon: Book },
     { label: "AI Conversations", value: "8,200+", icon: MessageCircle },
     { label: "Daily Reminders Sent", value: "45,000+", icon: Bell },
-  ];
+  ]);
+  const [loading, setLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newTestimonial, setNewTestimonial] = useState({
+    name: "",
+    role: "",
+    content: "",
+    rating: 5,
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  // Load testimonials from Firebase on component mount
+  useEffect(() => {
+    loadTestimonials();
+  }, []);
+
+  const loadTestimonials = async () => {
+    try {
+      setLoading(true);
+
+      // Create a query to get testimonials ordered by creation date (newest first)
+      const testimonialsQuery = query(
+        collection(db, "testimonials"),
+        orderBy("createdAt", "desc")
+      );
+
+      const testimonialsSnapshot = await getDocs(testimonialsQuery);
+      const testimonialsData = testimonialsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setTestimonials(testimonialsData);
+    } catch (error) {
+      console.error("Error loading testimonials:", error);
+
+      // If there's an error (like no data exists yet), show empty array
+      setTestimonials([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addTestimonial = async () => {
+    // Validate form
+    if (
+      !newTestimonial.name.trim() ||
+      !newTestimonial.role.trim() ||
+      !newTestimonial.content.trim()
+    ) {
+      alert("Please fill in all fields");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      const testimonialData = {
+        name: newTestimonial.name.trim(),
+        role: newTestimonial.role.trim(),
+        content: newTestimonial.content.trim(),
+        rating: newTestimonial.rating,
+        avatar: newTestimonial.name.charAt(0).toUpperCase(),
+        createdAt: serverTimestamp(), // Firebase server timestamp
+      };
+
+      // Add to Firebase
+      const docRef = await addDoc(
+        collection(db, "testimonials"),
+        testimonialData
+      );
+
+      // Add to local state with the new ID
+      const newTestimonialWithId = {
+        id: docRef.id,
+        ...testimonialData,
+        createdAt: new Date(), // For immediate display
+      };
+
+      setTestimonials((prev) => [newTestimonialWithId, ...prev]);
+
+      // Reset form
+      setNewTestimonial({ name: "", role: "", content: "", rating: 5 });
+      setShowAddForm(false);
+
+      alert("Testimonial added successfully!");
+    } catch (error) {
+      console.error("Error adding testimonial:", error);
+      alert("Error adding testimonial. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading testimonials...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 pt-32 pb-20">
+    <div
+      className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 pb-20"
+      style={{ paddingTop: "120px" }}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
@@ -634,11 +733,133 @@ const TestimonialsPage = () => {
               Say
             </span>
           </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+          <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-8">
             Real stories from people who have found comfort, support, and growth
             with MindHeaven.
           </p>
+
+          {/* Admin Controls */}
+          <div className="mb-8">
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="bg-green-700 text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-green-800 transition-colors inline-flex items-center space-x-3 shadow-lg hover:shadow-xl transform hover:scale-105"
+              disabled={submitting}
+              style={{ backgroundColor: "#14532d", color: "white" }}
+            >
+              <PlusCircle className="w-6 h-6" />
+              <span>Add New Testimonial</span>
+            </button>
+          </div>
         </div>
+
+        {/* Add Testimonial Form */}
+        {showAddForm && (
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 border border-white/50 mb-16 max-w-2xl mx-auto shadow-lg">
+            <h3 className="text-2xl font-bold text-gray-900 mb-6">
+              Add New Testimonial
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={newTestimonial.name}
+                  onChange={(e) =>
+                    setNewTestimonial((prev) => ({
+                      ...prev,
+                      name: e.target.value,
+                    }))
+                  }
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  placeholder="Enter full name"
+                  disabled={submitting}
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2">
+                  Role
+                </label>
+                <input
+                  type="text"
+                  value={newTestimonial.role}
+                  onChange={(e) =>
+                    setNewTestimonial((prev) => ({
+                      ...prev,
+                      role: e.target.value,
+                    }))
+                  }
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  placeholder="e.g., Student, Professional, etc."
+                  disabled={submitting}
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2">
+                  Testimonial
+                </label>
+                <textarea
+                  value={newTestimonial.content}
+                  onChange={(e) =>
+                    setNewTestimonial((prev) => ({
+                      ...prev,
+                      content: e.target.value,
+                    }))
+                  }
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-transparent h-32 transition-all resize-none"
+                  placeholder="Share your experience with MindHeaven..."
+                  disabled={submitting}
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2">
+                  Rating
+                </label>
+                <select
+                  value={newTestimonial.rating}
+                  onChange={(e) =>
+                    setNewTestimonial((prev) => ({
+                      ...prev,
+                      rating: parseInt(e.target.value),
+                    }))
+                  }
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  disabled={submitting}
+                >
+                  {[5, 4, 3, 2, 1].map((num) => (
+                    <option key={num} value={num}>
+                      {num} Star{num !== 1 ? "s" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex space-x-4 pt-4">
+                <button
+                  onClick={addTestimonial}
+                  className="flex-1 text-white py-3 rounded-xl font-semibold transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  disabled={submitting}
+                  style={{ backgroundColor: "#047857" }}
+                  onMouseEnter={(e) =>
+                    !submitting && (e.target.style.backgroundColor = "#065f46")
+                  }
+                  onMouseLeave={(e) =>
+                    !submitting && (e.target.style.backgroundColor = "#047857")
+                  }
+                >
+                  {submitting ? "Adding..." : "Add Testimonial"}
+                </button>
+                <button
+                  onClick={() => setShowAddForm(false)}
+                  className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-400 transition-colors disabled:cursor-not-allowed"
+                  disabled={submitting}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Statistics */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
@@ -647,7 +868,7 @@ const TestimonialsPage = () => {
             return (
               <div
                 key={stat.label}
-                className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/50"
+                className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/50 hover:bg-white/70 transition-all duration-300 shadow-sm hover:shadow-md"
               >
                 <Icon className="w-8 h-8 text-emerald-500 mx-auto mb-4" />
                 <div className="text-3xl font-bold text-gray-900 mb-2">
@@ -660,58 +881,75 @@ const TestimonialsPage = () => {
         </div>
 
         {/* Testimonials */}
-        <div className="grid md:grid-cols-2 gap-8">
-          {testimonials.map((testimonial, index) => (
-            <div
-              key={index}
-              className="bg-white/60 backdrop-blur-sm rounded-3xl p-8 border border-white/50 hover:shadow-lg transition-all duration-300"
-            >
-              <div className="flex items-center mb-6">
-                <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center text-white font-bold text-lg mr-4">
-                  {testimonial.avatar}
-                </div>
-                <div>
-                  <div className="font-bold text-gray-900">
-                    {testimonial.name}
-                  </div>
-                  <div className="text-gray-600 text-sm">
-                    {testimonial.role}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex mb-4">
-                {[...Array(testimonial.rating)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className="w-5 h-5 text-yellow-400 fill-current"
-                  />
-                ))}
-              </div>
-
-              <p className="text-gray-700 leading-relaxed italic">
-                "{testimonial.content}"
-              </p>
+        {testimonials.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="text-gray-400 mb-4">
+              <MessageCircle className="w-16 h-16 mx-auto" />
             </div>
-          ))}
-        </div>
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">
+              No testimonials yet
+            </h3>
+            <p className="text-gray-500">
+              Be the first to share your experience!
+            </p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-8">
+            {testimonials.map((testimonial, index) => (
+              <div
+                key={testimonial.id}
+                className="bg-white/60 backdrop-blur-sm rounded-3xl p-8 border border-white/50 hover:bg-white/70 hover:shadow-lg transition-all duration-300"
+              >
+                <div className="flex items-center mb-6">
+                  <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center text-white font-bold text-lg mr-4 shadow-md">
+                    {testimonial.avatar}
+                  </div>
+                  <div>
+                    <div className="font-bold text-gray-900 text-lg">
+                      {testimonial.name}
+                    </div>
+                    <div className="text-gray-600 text-sm">
+                      {testimonial.role}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex mb-4">
+                  {[...Array(testimonial.rating)].map((_, i) => (
+                    <Star
+                      key={i}
+                      className="w-5 h-5 text-yellow-400 fill-current"
+                    />
+                  ))}
+                  {[...Array(5 - testimonial.rating)].map((_, i) => (
+                    <Star
+                      key={i + testimonial.rating}
+                      className="w-5 h-5 text-gray-300"
+                    />
+                  ))}
+                </div>
+
+                <p className="text-gray-700 leading-relaxed italic text-base">
+                  "{testimonial.content}"
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="text-center mt-16">
-          <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-3xl p-8 text-white">
+          <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-3xl p-8 text-white shadow-xl">
             <h2 className="text-3xl font-bold mb-4">
               Join Our Growing Community
             </h2>
-            <p className="text-emerald-100 mb-8 max-w-2xl mx-auto">
+            <p className="text-emerald-100 mb-8 max-w-2xl mx-auto text-lg">
               Thousands of users have already started their journey to better
               emotional well-being. Your story could be next.
             </p>
-            <Link
-              to="/download"
-              className="bg-white text-emerald-600 px-8 py-4 rounded-full font-semibold text-lg hover:shadow-lg transform hover:scale-105 transition-all duration-300 inline-flex items-center space-x-2"
-            >
+            <button className="bg-white text-emerald-600 px-8 py-4 rounded-full font-semibold text-lg hover:shadow-lg transform hover:scale-105 transition-all duration-300 inline-flex items-center space-x-2">
               <Download className="w-6 h-6" />
               <span>Start Your Journey</span>
-            </Link>
+            </button>
           </div>
         </div>
       </div>
@@ -887,19 +1125,67 @@ const AboutPage = () => {
 };
 
 // Contact Page
+
 const ContactPage = () => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     message: "",
   });
+  
+  const [submitStatus, setSubmitStatus] = useState({
+    isSubmitting: false,
+    isSuccess: false,
+    error: null
+  });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Handle form submission
-    console.log("Form submitted:", formData);
-    alert("Thank you for your message! We'll get back to you soon.");
-    setFormData({ name: "", email: "", message: "" });
+    setSubmitStatus({ isSubmitting: true, isSuccess: false, error: null });
+
+    try {
+      // Basic form validation
+      if (!formData.name.trim() || !formData.email.trim() || !formData.message.trim()) {
+        throw new Error("Please fill in all fields");
+      }
+
+      // Email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        throw new Error("Please enter a valid email address");
+      }
+
+      // Since Firebase isn't available in this environment, we'll simulate the submission
+      // Replace this section with your actual Firebase code in your project:
+      const docRef = await addDoc(collection(db, "contacts"), {
+        name: formData.name,
+        email: formData.email,
+        message: formData.message,
+        timestamp: serverTimestamp(),
+        status: 'new'
+      });
+
+      // Simulate API delay for demo purposes
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      console.log("Form data ready for submission:", formData);
+      
+      setSubmitStatus({ isSubmitting: false, isSuccess: true, error: null });
+      setFormData({ name: "", email: "", message: "" });
+      
+      // Reset success message after 5 seconds
+      setTimeout(() => {
+        setSubmitStatus(prev => ({ ...prev, isSuccess: false }));
+      }, 5000);
+      
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      setSubmitStatus({ 
+        isSubmitting: false, 
+        isSuccess: false, 
+        error: error.message || "Failed to send message. Please try again." 
+      });
+    }
   };
 
   const handleChange = (e) => {
@@ -927,17 +1213,37 @@ const ContactPage = () => {
 
         <div className="grid lg:grid-cols-2 gap-12">
           {/* Contact Form */}
-          <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-8 border border-white/50">
+          <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-8 border border-white/50 relative">
+            {/* Success Message Overlay */}
+            {submitStatus.isSuccess && (
+              <div className="absolute inset-0 bg-emerald-50/95 backdrop-blur-sm rounded-3xl flex items-center justify-center z-10">
+                <div className="text-center">
+                  <CheckCircle className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
+                  <h3 className="text-2xl font-bold text-emerald-700 mb-2">Message Sent!</h3>
+                  <p className="text-emerald-600">Thank you for reaching out. We'll get back to you soon.</p>
+                </div>
+              </div>
+            )}
+
             <h2 className="text-2xl font-bold text-gray-900 mb-6">
               Send us a message
             </h2>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            
+            {/* Error Message */}
+            {submitStatus.error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-500 mr-3 flex-shrink-0" />
+                <p className="text-red-700">{submitStatus.error}</p>
+              </div>
+            )}
+
+            <div className="space-y-6">
               <div>
                 <label
                   htmlFor="name"
                   className="block text-gray-700 font-medium mb-2"
                 >
-                  Your Name
+                  Your Name *
                 </label>
                 <input
                   type="text"
@@ -946,7 +1252,8 @@ const ContactPage = () => {
                   value={formData.name}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-emerald-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors bg-white/50"
+                  disabled={submitStatus.isSubmitting}
+                  className="w-full px-4 py-3 rounded-xl border border-emerald-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors bg-white/50 disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Enter your name"
                 />
               </div>
@@ -956,7 +1263,7 @@ const ContactPage = () => {
                   htmlFor="email"
                   className="block text-gray-700 font-medium mb-2"
                 >
-                  Email Address
+                  Email Address *
                 </label>
                 <input
                   type="email"
@@ -965,7 +1272,8 @@ const ContactPage = () => {
                   value={formData.email}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-emerald-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors bg-white/50"
+                  disabled={submitStatus.isSubmitting}
+                  className="w-full px-4 py-3 rounded-xl border border-emerald-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors bg-white/50 disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Enter your email"
                 />
               </div>
@@ -975,7 +1283,7 @@ const ContactPage = () => {
                   htmlFor="message"
                   className="block text-gray-700 font-medium mb-2"
                 >
-                  Message
+                  Message *
                 </label>
                 <textarea
                   id="message"
@@ -984,18 +1292,31 @@ const ContactPage = () => {
                   onChange={handleChange}
                   required
                   rows="6"
-                  className="w-full px-4 py-3 rounded-xl border border-emerald-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors bg-white/50 resize-none"
+                  disabled={submitStatus.isSubmitting}
+                  className="w-full px-4 py-3 rounded-xl border border-emerald-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors bg-white/50 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Tell us what's on your mind..."
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:shadow-lg transform hover:scale-105 transition-all duration-300"
+                onClick={handleSubmit}
+                disabled={submitStatus.isSubmitting}
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:shadow-lg transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:hover:shadow-none flex items-center justify-center"
               >
-                Send Message
+                {submitStatus.isSubmitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-5 h-5 mr-2" />
+                    Send Message
+                  </>
+                )}
               </button>
-            </form>
+            </div>
           </div>
 
           {/* Contact Info */}
@@ -1023,24 +1344,24 @@ const ContactPage = () => {
                 Quick Links
               </h3>
               <div className="space-y-3">
-                <Link
-                  to="/features"
+                <a
+                  href="/features"
                   className="block text-emerald-600 hover:text-emerald-700 transition-colors"
                 >
                   → Explore Features
-                </Link>
-                <Link
-                  to="/download"
+                </a>
+                <a
+                  href="/download"
                   className="block text-emerald-600 hover:text-emerald-700 transition-colors"
                 >
                   → Download App
-                </Link>
-                <Link
-                  to="/privacy"
+                </a>
+                <a
+                  href="/privacy"
                   className="block text-emerald-600 hover:text-emerald-700 transition-colors"
                 >
                   → Privacy Policy
-                </Link>
+                </a>
               </div>
             </div>
 
@@ -1066,6 +1387,7 @@ const ContactPage = () => {
     </div>
   );
 };
+
 
 // Privacy Policy Page
 const PrivacyPage = () => {
@@ -1339,7 +1661,6 @@ const Footer = () => {
           </p>
           <p>Built with ❤️ by Lokesh Yadav & Tanushree</p>
         </div>
-        
       </div>
     </footer>
   );
